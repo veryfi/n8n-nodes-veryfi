@@ -1,0 +1,30 @@
+{
+	"node": "n8n-nodes-veryfi.veryfi",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Utility", "Productivity"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://github.com/veryfi/n8n-nodes-veryfi#credentials"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/veryfi/n8n-nodes-veryfi#operations"
+			}
+		],
+		"generic": [
+			{
+				"label": "Veryfi API documentation",
+				"icon": "📚",
+				"url": "https://docs.veryfi.com/"
+			},
+			{
+				"label": "Get a Veryfi API key",
+				"icon": "🔑",
+				"url": "https://app.veryfi.com/api/settings/keys/"
+			}
+		]
+	}
+}
