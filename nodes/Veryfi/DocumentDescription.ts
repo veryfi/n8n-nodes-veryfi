@@ -221,7 +221,7 @@ export const documentFields: INodeProperties[] = [
 		type: 'string',
 		required: true,
 		default: '',
-		placeholder: 'https://example.com/invoice.pdf',
+		placeholder: 'e.g. https://example.com/invoice.pdf',
 		description:
 			'Public URL of the document. Veryfi will fetch and process it server-side. Must be reachable without authentication.',
 		displayOptions: {
@@ -237,7 +237,7 @@ export const documentFields: INodeProperties[] = [
 		name: 'fileName',
 		type: 'string',
 		default: '',
-		placeholder: 'invoice.pdf',
+		placeholder: 'e.g. invoice.pdf',
 		description:
 			'Optional file name to send to Veryfi. If left empty, the file name is taken from the binary input (or omitted for URL input).',
 		displayOptions: {

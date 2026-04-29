@@ -50,8 +50,8 @@ export class VeryfiApi implements ICredentialType {
 		type: 'generic',
 		properties: {
 			headers: {
-				'CLIENT-ID': '={{$credentials.clientId}}',
-				Authorization: '=apikey {{$credentials.username}}:{{$credentials.apiKey}}',
+				'CLIENT-ID': '={{$credentials?.clientId}}',
+				Authorization: '=apikey {{$credentials?.username}}:{{$credentials?.apiKey}}',
 				Accept: 'application/json',
 			},
 		},
