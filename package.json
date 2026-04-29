@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-veryfi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "n8n community node for Veryfi document AI: extract structured data from invoices, receipts, checks, bank statements, W-9/W-2, IDs, and any document via blueprints.",
   "keywords": [
     "n8n-community-node-package",
