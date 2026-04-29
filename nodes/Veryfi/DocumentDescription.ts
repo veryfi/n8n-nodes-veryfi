@@ -23,15 +23,6 @@ export const CONFIDENCE_OPERATIONS = [
 	'extractW2',
 ];
 
-export const SENSITIVE_OPERATIONS = [
-	'extractCheck',
-	'extractBankStatement',
-	'extractW9',
-	'extractW2',
-	'extractDriverLicense',
-	'extractPassport',
-];
-
 export const documentOperations: INodeProperties[] = [
 	{
 		displayName: 'Resource',
@@ -39,10 +30,6 @@ export const documentOperations: INodeProperties[] = [
 		type: 'options',
 		noDataExpression: true,
 		options: [
-			{
-				name: 'Blueprint',
-				value: 'blueprint',
-			},
 			{
 				name: 'Document',
 				value: 'document',
@@ -125,42 +112,9 @@ export const documentOperations: INodeProperties[] = [
 		],
 		default: 'extractInvoice',
 	},
-	{
-		displayName: 'Operation',
-		name: 'operation',
-		type: 'options',
-		noDataExpression: true,
-		displayOptions: {
-			show: {
-				resource: ['blueprint'],
-			},
-		},
-		options: [
-			{
-				name: 'List',
-				value: 'listBlueprints',
-				action: 'List blueprints',
-				description: 'Return all blueprints available to your Veryfi account',
-			},
-		],
-		default: 'listBlueprints',
-	},
 ];
 
 export const documentFields: INodeProperties[] = [
-	{
-		displayName:
-			'Reminder: documents may contain Sensitive Personal Data. Only route them through workflows you are authorized to operate, and only to downstream apps approved for that data.',
-		name: 'sensitiveDataNotice',
-		type: 'notice',
-		default: '',
-		displayOptions: {
-			show: {
-				resource: ['document'],
-				operation: SENSITIVE_OPERATIONS,
-			},
-		},
-	},
 	{
 		displayName: 'File Source',
 		name: 'fileSource',

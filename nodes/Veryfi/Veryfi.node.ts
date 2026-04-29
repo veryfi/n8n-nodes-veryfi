@@ -109,27 +109,6 @@ export class Veryfi implements INodeType {
 		const resource = this.getNodeParameter('resource', 0);
 		const operation = this.getNodeParameter('operation', 0);
 
-		// Resource-level operations run once regardless of input items, then fan
-		// out their results. We pair each emitted item back to item 0 of the input.
-		if (resource === 'blueprint' && operation === 'listBlueprints') {
-			try {
-				const blueprints = await runListBlueprints.call(this);
-				for (const blueprint of blueprints) {
-					returnData.push({ json: blueprint, pairedItem: { item: 0 } });
-				}
-			} catch (error) {
-				if (this.continueOnFail()) {
-					returnData.push({
-						json: { error: (error as Error).message },
-						pairedItem: { item: 0 },
-					});
-				} else {
-					throw error;
-				}
-			}
-			return [returnData];
-		}
-
 		for (let i = 0; i < items.length; i++) {
 			try {
 				let response: IDataObject;
@@ -289,12 +268,4 @@ async function runClassify(this: IExecuteFunctions, itemIndex: number): Promise<
 		'/api/v8/partner/classify/',
 		body,
 	)) as IDataObject;
-}
-
-async function runListBlueprints(this: IExecuteFunctions): Promise<IDataObject[]> {
-	const response = (await veryfiApiRequest.call(this, 'GET', '/api/v8/partner/blueprints/')) as {
-		blueprints?: IDataObject[];
-	};
-
-	return response?.blueprints ?? [];
 }

@@ -32,7 +32,7 @@ Then restart n8n.
 
 ## Operations
 
-The node exposes two resources:
+The node exposes one resource:
 
 ### Resource: Document
 
@@ -48,12 +48,6 @@ The node exposes two resources:
 | **Extract Data From Passport** | `POST /api/v8/partner/any-documents/` (`blueprint_name=passport`) | Passport image. |
 | **Extract Data From Any Document** | `POST /api/v8/partner/any-documents/` | Pick any blueprint available to your account from a dynamic dropdown. |
 | **Classify Document** | `POST /api/v8/partner/classify/` | Returns one of `receipt`, `invoice`, `purchase_order`, `w9`, `statement`, `check`, `packing_slip`, `contract`, `w8`, `remittance_advice`, `bank_statement`, `credit_note`, `w2`, `other` (or a custom list). |
-
-### Resource: Blueprint
-
-| Operation | Endpoint | Notes |
-| --- | --- | --- |
-| **List** | `GET /api/v8/partner/blueprints/` | Emits one item per blueprint available to your Veryfi account. |
 
 ### Input modes
 
@@ -99,10 +93,6 @@ Each extraction operation has an **Additional Options** collection where you can
 - `tags` — attach tags to the document.
 
 Veryfi silently ignores fields that aren't supported on a given endpoint.
-
-### Sensitive data
-
-Extraction operations for Check, Bank Statement, W-9, W-2, Driver License, and Passport display a reminder notice in the editor. These document types contain Sensitive Personal Data — only route them through workflows you are authorized to operate, and only to downstream apps approved for that data.
 
 ## Credentials
 
