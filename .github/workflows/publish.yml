@@ -1,0 +1,77 @@
+# Publishes this n8n community node package to npm on every version tag push.
+#
+# n8n requires verified community nodes to be published via GitHub Actions
+# with npm provenance statements. This workflow satisfies that requirement.
+# Provenance lets anyone cryptographically verify that a package was built by
+# this exact workflow, from this exact repository and commit.
+#
+# ─── ONE-TIME SETUP ────────────────────────────────────────────────────────────
+#
+# Option A — OIDC Trusted Publishing (recommended, no long-lived secrets):
+#   1. Log in to npmjs.com and open this package's settings.
+#   2. Under "Publish access" → "Trusted Publishers", click "Add a publisher".
+#   3. Select GitHub Actions and fill in:
+#        Repository owner: veryfi
+#        Repository name:  n8n-nodes-veryfi
+#        Workflow name:    publish.yml
+#        Environment:      (leave blank)
+#   4. Leave NPM_TOKEN unset in this repository's Actions secrets.
+#
+# Option B — npm Automation Token (fallback):
+#   1. On npmjs.com: Access Tokens → Generate New Token → Granular Access Token.
+#      Scope it to n8n-nodes-veryfi with "Read and write" publish permission.
+#   2. In GitHub: Settings → Secrets and variables → Actions → New secret.
+#      Name it NPM_TOKEN.
+#
+# ─── RELEASE PROCESS ───────────────────────────────────────────────────────────
+#
+# Run locally to start an interactive release:
+#
+#   pnpm run release
+#
+# release-it (driven by `n8n-node release`) lints, builds, prompts for a
+# version bump, updates the changelog, commits, tags, and pushes — which
+# triggers this workflow to publish to npm with provenance.
+
+name: Publish
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Release
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
+          fi
+          pnpm run release
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

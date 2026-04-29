@@ -2,9 +2,9 @@ import type {
 	IDataObject,
 	IExecuteFunctions,
 	IHttpRequestMethods,
+	IHttpRequestOptions,
 	ILoadOptionsFunctions,
 	INodePropertyOptions,
-	IRequestOptions,
 	JsonObject,
 } from 'n8n-workflow';
 import { NodeApiError } from 'n8n-workflow';
@@ -12,7 +12,7 @@ import { NodeApiError } from 'n8n-workflow';
 const VERYFI_BASE_URL = 'https://api.veryfi.com';
 
 /**
- * Thin wrapper around `requestWithAuthentication` for the Veryfi partner API.
+ * Thin wrapper around `httpRequestWithAuthentication` for the Veryfi partner API.
  * Always sends JSON; injects credentials via the `veryfiApi` credential type.
  */
 export async function veryfiApiRequest(
@@ -21,28 +21,26 @@ export async function veryfiApiRequest(
 	path: string,
 	body: IDataObject = {},
 	qs: IDataObject = {},
-): Promise<any> {
-	const options: IRequestOptions = {
+): Promise<unknown> {
+	const options: IHttpRequestOptions = {
 		method,
-		uri: `${VERYFI_BASE_URL}${path}`,
+		url: `${VERYFI_BASE_URL}${path}`,
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
 		},
-		body,
-		qs,
 		json: true,
 	};
 
-	if (Object.keys(body).length === 0) {
-		delete options.body;
+	if (Object.keys(body).length > 0) {
+		options.body = body;
 	}
-	if (Object.keys(qs).length === 0) {
-		delete options.qs;
+	if (Object.keys(qs).length > 0) {
+		options.qs = qs;
 	}
 
 	try {
-		return await this.helpers.requestWithAuthentication.call(this, 'veryfiApi', options);
+		return await this.helpers.httpRequestWithAuthentication.call(this, 'veryfiApi', options);
 	} catch (error) {
 		throw new NodeApiError(this.getNode(), error as JsonObject);
 	}

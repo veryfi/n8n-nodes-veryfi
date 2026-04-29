@@ -30,9 +30,10 @@ describe('Veryfi transformConfidence helper', () => {
 				country_code: 'US',
 			},
 		};
-		const out = transformConfidence(input) as Record<string, any>;
-		expect(out.vendor.name).toBe('Rumpke');
-		expect(out.vendor.country_code).toBe('US');
+		const out = transformConfidence(input) as Record<string, unknown>;
+		const vendor = out.vendor as Record<string, unknown>;
+		expect(vendor.name).toBe('Rumpke');
+		expect(vendor.country_code).toBe('US');
 		expect(out.vendor__name__score).toBe(0.91);
 		expect(out.vendor__name__ocr_score).toBe(0.97);
 	});
@@ -47,11 +48,12 @@ describe('Veryfi transformConfidence helper', () => {
 				{ description: 'Plain', total: 1.0 },
 			],
 		};
-		const out = transformConfidence(input) as Record<string, any>;
-		expect(out.line_items[0].description).toBe('Widget');
-		expect(out.line_items[0].total).toBe(9.99);
-		expect(out.line_items[1].description).toBe('Plain');
-		expect(out.line_items[1].total).toBe(1.0);
+		const out = transformConfidence(input) as Record<string, unknown>;
+		const lineItems = out.line_items as Array<Record<string, unknown>>;
+		expect(lineItems[0].description).toBe('Widget');
+		expect(lineItems[0].total).toBe(9.99);
+		expect(lineItems[1].description).toBe('Plain');
+		expect(lineItems[1].total).toBe(1.0);
 	});
 
 	it('omits score keys when score / ocr_score are missing or null', () => {

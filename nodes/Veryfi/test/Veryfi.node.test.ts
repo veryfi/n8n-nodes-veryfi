@@ -1,5 +1,4 @@
-import { mockDeep } from 'jest-mock-extended';
-import type { IExecuteFunctions, INode } from 'n8n-workflow';
+import type { IBinaryData, IExecuteFunctions, INode, INodeExecutionData } from 'n8n-workflow';
 
 import * as GenericFunctions from '../GenericFunctions';
 import { Veryfi } from '../Veryfi.node';
@@ -20,35 +19,79 @@ const mockClassifyResponse = {
 
 type ParamMap = Record<string, unknown>;
 
-function setParams(execMock: ReturnType<typeof mockDeep<IExecuteFunctions>>, params: ParamMap) {
+interface ExecMock {
+	exec: IExecuteFunctions;
+	getNodeParameter: jest.Mock;
+	getInputData: jest.Mock;
+	continueOnFail: jest.Mock;
+	getNode: jest.Mock;
+	assertBinaryData: jest.Mock;
+	getBinaryDataBuffer: jest.Mock;
+}
+
+function createExecMock(): ExecMock {
+	const getNodeParameter = jest.fn();
+	const getInputData = jest.fn().mockReturnValue([{ json: {} }]);
+	const continueOnFail = jest.fn().mockReturnValue(false);
+	const getNode = jest.fn().mockReturnValue({ typeVersion: 1 } as INode);
+	const assertBinaryData = jest.fn().mockReturnValue({
+		fileName: TEST_FILE_NAME,
+		mimeType: 'application/pdf',
+		data: '',
+	} satisfies Partial<IBinaryData> as IBinaryData);
+	const getBinaryDataBuffer = jest.fn().mockResolvedValue(TEST_FILE_BUFFER);
+
+	const exec = {
+		getNodeParameter,
+		getInputData,
+		continueOnFail,
+		getNode,
+		helpers: {
+			assertBinaryData,
+			getBinaryDataBuffer,
+		},
+	} as unknown as IExecuteFunctions;
+
+	return {
+		exec,
+		getNodeParameter,
+		getInputData,
+		continueOnFail,
+		getNode,
+		assertBinaryData,
+		getBinaryDataBuffer,
+	};
+}
+
+function setParams(mock: ExecMock, params: ParamMap) {
 	const merged: ParamMap = { resource: 'document', ...params };
-	execMock.getNodeParameter.mockImplementation(((name: string, _i?: number, fallback?: unknown) => {
-		if (name in merged) return merged[name];
-		return fallback;
-	}) as IExecuteFunctions['getNodeParameter']);
+	mock.getNodeParameter.mockImplementation(
+		(name: string, _i?: number, fallback?: unknown): unknown => {
+			if (name in merged) return merged[name];
+			return fallback;
+		},
+	);
+}
+
+type ResponseJson = Record<string, unknown>;
+
+function firstItem(result: INodeExecutionData[][]): INodeExecutionData {
+	return result[0][0];
 }
 
 describe('Veryfi Node', () => {
-	const exec = mockDeep<IExecuteFunctions>();
 	const apiSpy = jest.spyOn(GenericFunctions, 'veryfiApiRequest');
 	const node = new Veryfi();
+	let mock: ExecMock;
 
 	beforeEach(() => {
 		jest.resetAllMocks();
-		exec.getNode.mockReturnValue({ typeVersion: 1 } as INode);
-		exec.getInputData.mockReturnValue([{ json: {} }]);
-		exec.continueOnFail.mockReturnValue(false);
-		exec.helpers.assertBinaryData.mockReturnValue({
-			fileName: TEST_FILE_NAME,
-			mimeType: 'application/pdf',
-			data: '',
-		} as any);
-		exec.helpers.getBinaryDataBuffer.mockResolvedValue(TEST_FILE_BUFFER);
+		mock = createExecMock();
 	});
 
 	describe('extractInvoice operation', () => {
 		it('posts file_data + file_name to /documents/ and returns the API response', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractInvoice',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -58,7 +101,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			const result = await node.execute.call(exec);
+			const result = await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith('POST', '/api/v8/partner/documents/', {
 				file_data: EXPECTED_BASE64,
@@ -68,7 +111,7 @@ describe('Veryfi Node', () => {
 		});
 
 		it('forwards additional options into the request body', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractInvoice',
 				binaryPropertyName: 'data',
 				fileName: 'override.pdf',
@@ -84,7 +127,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith('POST', '/api/v8/partner/documents/', {
 				file_data: EXPECTED_BASE64,
@@ -97,7 +140,7 @@ describe('Veryfi Node', () => {
 		});
 
 		it('flattens confidence-detail responses when requested', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractInvoice',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -109,15 +152,16 @@ describe('Veryfi Node', () => {
 				invoice_number: { value: '0998811', score: 0.93, ocr_score: 0.98 },
 			});
 
-			const [[item]] = await node.execute.call(exec);
+			const item = firstItem(await node.execute.call(mock.exec));
+			const json = item.json as ResponseJson;
 
-			expect((item.json as any).invoice_number).toBe('0998811');
-			expect((item.json as any).invoice_number__score).toBe(0.93);
-			expect((item.json as any).invoice_number__ocr_score).toBe(0.98);
+			expect(json.invoice_number).toBe('0998811');
+			expect(json.invoice_number__score).toBe(0.93);
+			expect(json.invoice_number__ocr_score).toBe(0.98);
 		});
 
 		it('preserves raw confidence shape when flattening is disabled', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractInvoice',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -130,7 +174,7 @@ describe('Veryfi Node', () => {
 			};
 			apiSpy.mockResolvedValue(raw);
 
-			const [[item]] = await node.execute.call(exec);
+			const item = firstItem(await node.execute.call(mock.exec));
 
 			expect(item.json).toEqual(raw);
 		});
@@ -138,7 +182,7 @@ describe('Veryfi Node', () => {
 
 	describe('extractReceipt operation', () => {
 		it('uses the same /documents/ endpoint as invoice', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractReceipt',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -148,7 +192,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith(
 				'POST',
@@ -160,7 +204,7 @@ describe('Veryfi Node', () => {
 
 	describe('extractCheck operation', () => {
 		it('posts to /checks/', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractCheck',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -170,7 +214,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith('POST', '/api/v8/partner/checks/', expect.any(Object));
 		});
@@ -178,7 +222,7 @@ describe('Veryfi Node', () => {
 
 	describe('extractBankStatement operation', () => {
 		it('posts to /bank-statements/', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractBankStatement',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -188,7 +232,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith(
 				'POST',
@@ -200,7 +244,7 @@ describe('Veryfi Node', () => {
 
 	describe('extractW9 operation', () => {
 		it('posts to /w9s/', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractW9',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -210,7 +254,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith('POST', '/api/v8/partner/w9s/', expect.any(Object));
 		});
@@ -218,7 +262,7 @@ describe('Veryfi Node', () => {
 
 	describe('extractW2 operation', () => {
 		it('posts to /w2s/', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractW2',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -228,7 +272,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith('POST', '/api/v8/partner/w2s/', expect.any(Object));
 		});
@@ -236,7 +280,7 @@ describe('Veryfi Node', () => {
 
 	describe('extractDriverLicense operation', () => {
 		it('posts to /any-documents/ with blueprint_name=us_driver_license', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractDriverLicense',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -244,7 +288,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith(
 				'POST',
@@ -259,7 +303,7 @@ describe('Veryfi Node', () => {
 
 	describe('extractPassport operation', () => {
 		it('posts to /any-documents/ with blueprint_name=passport', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractPassport',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -267,7 +311,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith(
 				'POST',
@@ -282,7 +326,7 @@ describe('Veryfi Node', () => {
 
 	describe('extractAnyDocument operation', () => {
 		it('posts to /any-documents/ with the user-selected blueprint_name', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractAnyDocument',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -291,7 +335,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith(
 				'POST',
@@ -304,7 +348,7 @@ describe('Veryfi Node', () => {
 		});
 
 		it('throws when no blueprint name is provided', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractAnyDocument',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -312,13 +356,13 @@ describe('Veryfi Node', () => {
 				additionalOptions: {},
 			});
 
-			await expect(node.execute.call(exec)).rejects.toThrow(/blueprint name is required/i);
+			await expect(node.execute.call(mock.exec)).rejects.toThrow(/blueprint name is required/i);
 		});
 	});
 
 	describe('classifyDocument operation', () => {
 		it('posts to /classify/ without document_types when none supplied', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'classifyDocument',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -326,7 +370,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockClassifyResponse);
 
-			const result = await node.execute.call(exec);
+			const result = await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith('POST', '/api/v8/partner/classify/', {
 				file_data: EXPECTED_BASE64,
@@ -336,7 +380,7 @@ describe('Veryfi Node', () => {
 		});
 
 		it('forwards document_types when supplied', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'classifyDocument',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -344,7 +388,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockClassifyResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith(
 				'POST',
@@ -356,7 +400,7 @@ describe('Veryfi Node', () => {
 		});
 
 		it('strips empty / whitespace-only entries from document_types', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'classifyDocument',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -364,7 +408,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockClassifyResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith(
 				'POST',
@@ -376,7 +420,7 @@ describe('Veryfi Node', () => {
 		});
 
 		it('omits document_types entirely when all entries are blank', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'classifyDocument',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -384,7 +428,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockClassifyResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith(
 				'POST',
@@ -396,7 +440,7 @@ describe('Veryfi Node', () => {
 
 	describe('error handling', () => {
 		it('continues on fail when continueOnFail is true', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractInvoice',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -404,17 +448,17 @@ describe('Veryfi Node', () => {
 				flattenConfidence: true,
 				additionalOptions: {},
 			});
-			exec.continueOnFail.mockReturnValue(true);
+			mock.continueOnFail.mockReturnValue(true);
 			apiSpy.mockRejectedValue(new Error('boom'));
 
-			const [[item]] = await node.execute.call(exec);
+			const item = firstItem(await node.execute.call(mock.exec));
 
 			expect(item.json).toEqual({ error: 'boom' });
 			expect(item.pairedItem).toEqual({ item: 0 });
 		});
 
 		it('rethrows when continueOnFail is false', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractInvoice',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -424,13 +468,13 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockRejectedValue(new Error('boom'));
 
-			await expect(node.execute.call(exec)).rejects.toThrow('boom');
+			await expect(node.execute.call(mock.exec)).rejects.toThrow('boom');
 		});
 	});
 
 	describe('multiple input items', () => {
 		it('runs once per item and tags pairedItem', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractInvoice',
 				binaryPropertyName: 'data',
 				fileName: '',
@@ -438,10 +482,10 @@ describe('Veryfi Node', () => {
 				flattenConfidence: true,
 				additionalOptions: {},
 			});
-			exec.getInputData.mockReturnValue([{ json: {} }, { json: {} }]);
+			mock.getInputData.mockReturnValue([{ json: {} }, { json: {} }]);
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			const [items] = await node.execute.call(exec);
+			const [items] = await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledTimes(2);
 			expect(items).toHaveLength(2);
@@ -452,7 +496,7 @@ describe('Veryfi Node', () => {
 
 	describe('url input mode', () => {
 		it('sends file_url instead of file_data when fileSource is url', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractInvoice',
 				fileSource: 'url',
 				fileUrl: 'https://example.com/invoice.pdf',
@@ -463,16 +507,16 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
-			expect(exec.helpers.getBinaryDataBuffer).not.toHaveBeenCalled();
+			expect(mock.getBinaryDataBuffer).not.toHaveBeenCalled();
 			expect(apiSpy).toHaveBeenCalledWith('POST', '/api/v8/partner/documents/', {
 				file_url: 'https://example.com/invoice.pdf',
 			});
 		});
 
 		it('passes the user-supplied file_name when present in url mode', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractInvoice',
 				fileSource: 'url',
 				fileUrl: 'https://example.com/invoice.pdf',
@@ -483,7 +527,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith(
 				'POST',
@@ -496,7 +540,7 @@ describe('Veryfi Node', () => {
 		});
 
 		it('throws when fileSource is url but fileUrl is empty', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractInvoice',
 				fileSource: 'url',
 				fileUrl: '',
@@ -506,11 +550,11 @@ describe('Veryfi Node', () => {
 				additionalOptions: {},
 			});
 
-			await expect(node.execute.call(exec)).rejects.toThrow(/file URL is required/i);
+			await expect(node.execute.call(mock.exec)).rejects.toThrow(/file URL is required/i);
 		});
 
 		it('still works for blueprint-based ops (driver license) in url mode', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				operation: 'extractDriverLicense',
 				fileSource: 'url',
 				fileUrl: 'https://example.com/dl.jpg',
@@ -519,7 +563,7 @@ describe('Veryfi Node', () => {
 			});
 			apiSpy.mockResolvedValue(mockVeryfiResponse);
 
-			await node.execute.call(exec);
+			await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith('POST', '/api/v8/partner/any-documents/', {
 				file_url: 'https://example.com/dl.jpg',
@@ -530,7 +574,7 @@ describe('Veryfi Node', () => {
 
 	describe('listBlueprints operation', () => {
 		it('GETs /blueprints/ and emits one item per blueprint', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				resource: 'blueprint',
 				operation: 'listBlueprints',
 			});
@@ -541,7 +585,7 @@ describe('Veryfi Node', () => {
 				],
 			});
 
-			const [items] = await node.execute.call(exec);
+			const [items] = await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledWith('GET', '/api/v8/partner/blueprints/');
 			expect(items).toHaveLength(2);
@@ -553,28 +597,28 @@ describe('Veryfi Node', () => {
 		});
 
 		it('emits zero items when the account has no blueprints', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				resource: 'blueprint',
 				operation: 'listBlueprints',
 			});
 			apiSpy.mockResolvedValue({ blueprints: [] });
 
-			const [items] = await node.execute.call(exec);
+			const [items] = await node.execute.call(mock.exec);
 
 			expect(items).toHaveLength(0);
 		});
 
 		it('runs once regardless of input item count (does not multiply per item)', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				resource: 'blueprint',
 				operation: 'listBlueprints',
 			});
-			exec.getInputData.mockReturnValue([{ json: {} }, { json: {} }, { json: {} }]);
+			mock.getInputData.mockReturnValue([{ json: {} }, { json: {} }, { json: {} }]);
 			apiSpy.mockResolvedValue({
 				blueprints: [{ name: 'utility_bill', document_type: 'utility_bill' }],
 			});
 
-			const [items] = await node.execute.call(exec);
+			const [items] = await node.execute.call(mock.exec);
 
 			expect(apiSpy).toHaveBeenCalledTimes(1);
 			expect(items).toHaveLength(1);
@@ -582,14 +626,14 @@ describe('Veryfi Node', () => {
 		});
 
 		it('respects continueOnFail when the API call errors', async () => {
-			setParams(exec, {
+			setParams(mock, {
 				resource: 'blueprint',
 				operation: 'listBlueprints',
 			});
-			exec.continueOnFail.mockReturnValue(true);
+			mock.continueOnFail.mockReturnValue(true);
 			apiSpy.mockRejectedValue(new Error('upstream down'));
 
-			const [[item]] = await node.execute.call(exec);
+			const item = firstItem(await node.execute.call(mock.exec));
 
 			expect(item.json).toEqual({ error: 'upstream down' });
 			expect(item.pairedItem).toEqual({ item: 0 });

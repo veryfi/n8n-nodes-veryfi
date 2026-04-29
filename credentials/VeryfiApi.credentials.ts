@@ -1,5 +1,6 @@
 import type {
 	IAuthenticateGeneric,
+	Icon,
 	ICredentialTestRequest,
 	ICredentialType,
 	INodeProperties,
@@ -11,6 +12,8 @@ export class VeryfiApi implements ICredentialType {
 	displayName = 'Veryfi API';
 
 	documentationUrl = 'https://github.com/veryfi/n8n-nodes-veryfi';
+
+	icon: Icon = 'file:icons/veryfi.svg';
 
 	properties: INodeProperties[] = [
 		{
